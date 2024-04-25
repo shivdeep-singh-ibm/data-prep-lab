@@ -1,0 +1,14 @@
+
+name: Test CI
+# for testing purposes
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Test data-processing-lib
+      run: |
+         make -C data-processing-lib DOCKER=docker venv test 
