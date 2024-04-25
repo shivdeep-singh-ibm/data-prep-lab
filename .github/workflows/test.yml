@@ -11,4 +11,10 @@ jobs:
       uses: actions/checkout@v4
     - name: Test data-processing-lib
       run: |
-         make -C data-processing-lib DOCKER=docker venv test 
+         make -C data-processing-lib DOCKER=docker venv test
+    - name: Test Code Transforms
+      run: |
+         make -C transforms/code DOCKER=docker venv test-src 
+    - name: Test Universal Transforms
+      run: |
+         make -C transforms/universal DOCKER=docker venv test-src 
