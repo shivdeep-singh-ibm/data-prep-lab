@@ -1,7 +1,7 @@
 
 name: Test CI
 # for testing purposes
-on: push
+on: 
   workflow_dispatch:
   push:
     branches:
