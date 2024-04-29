@@ -34,7 +34,7 @@ jobs:
       uses: actions/checkout@v4
     - name: Test Universal Transforms
       run: |
-         #make -C transforms/universal/doc_id DOCKER=docker venv test-src
+         make -C transforms/universal/doc_id DOCKER=docker venv test-src
          echo "This is a placeholder."
   test-universal-ededup:
     runs-on: ubuntu-latest
