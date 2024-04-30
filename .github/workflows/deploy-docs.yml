@@ -4,6 +4,7 @@ on:
   push:
     branches: 
       - main
+      - test-ci
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -14,8 +15,9 @@ jobs:
           python-version: 3.x
       - run: pip install mkdocs-material mkdocstrings[python] mkdocs-badges
       - run: |
-           cp README.md ./data-processing-lib/doc/index.md
            # remove badges 
-           cat README.md |sed  '/img\.shields\.io/d' > ./data-processing-lib/doc/index_.md 
+           cat README.md |sed  '/img\.shields\.io/d' > ./data-processing-lib/doc/index.md 
            cp doc/* ./data-processing-lib/doc/
+           cp -rf transforms  ./data-processing-lib/doc/transforms
+           cp -rf tools ./data-processing-lib/doc/tools
            cd data-processing-lib && mkdocs gh-deploy --force
