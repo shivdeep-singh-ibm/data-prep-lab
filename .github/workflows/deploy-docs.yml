@@ -5,6 +5,7 @@ on:
     push:
         branches:
             - dev
+            - expt
 jobs:
     deploy:
         runs-on: ubuntu-latest
@@ -18,4 +19,6 @@ jobs:
                   # remove badges 
                   cat README.md |sed  '/img\.shields\.io/d' > README_.md
                   mv README_.md README.md  
+                  cd data-processing-lib && pip install . 
+                  export PYTHPNPATH=$(pwd)/data-processing-lib/src
                   mkdocs gh-deploy --force
