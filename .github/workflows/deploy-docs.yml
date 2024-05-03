@@ -19,6 +19,6 @@ jobs:
                   # remove badges 
                   cat README.md |sed  '/img\.shields\.io/d' > README_.md
                   mv README_.md README.md  
-                  cd data-processing-lib && pip install . 
+                  cd data-processing-lib && pip install . && cd -
                   export PYTHPNPATH=$(pwd)/data-processing-lib/src
                   mkdocs gh-deploy --force
