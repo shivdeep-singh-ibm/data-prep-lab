@@ -8,6 +8,10 @@ on:
 jobs:
     deploy:
         runs-on: ubuntu-latest
+        env:
+            - REPO_URL = ${{ github.repository }}
+            - REPO_BRANCH = "dev"
+              #${{ github.ref }}
         steps:
             - uses: actions/checkout@v2
             - uses: actions/setup-python@v2
