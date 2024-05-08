@@ -10,7 +10,7 @@ import mkdocs.plugins
 log = logging.getLogger("mkdocs")
 
 GITHUB_REPO = os.getenv("REPO_URL", r"https://github.com/IBM/data-prep-lab")
-GITHUB_REPO = "https://github.com/IBM/data-prep-lab"
+#GITHUB_REPO = "https://github.com/IBM/data-prep-lab"
 
 GITHUB_BRANCH = os.getenv("REPO_BRANCH", "dev")
 GITHUB_VIEW_FILE = "blob"
