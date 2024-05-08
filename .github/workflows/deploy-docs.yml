@@ -23,4 +23,4 @@ jobs:
                   # remove badges 
                   cat README.md |sed  '/img\.shields\.io/d' > README_.md
                   mv README_.md README.md  
-                  mkdocs gh-deploy --force
+                  mkdocs gh-deploy --clean --verbose --force
