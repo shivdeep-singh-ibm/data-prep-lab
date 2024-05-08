@@ -146,9 +146,9 @@ def on_page_markdown(markdown, page, **kwargs):
         """
 
         def update_link(pair: Tuple[str, str]) -> Tuple[str, str, str]:
-            link = get_repo_relative_path(pair[1])
+            link = normpath(get_repo_relative_path(pair[1]))
             prefix = os.path.join(os.path.join(os.path.join(GITHUB_REPO, view), GITHUB_BRANCH), link)
-            return (pair[0], pair[1], normpath(prefix))
+            return (pair[0], pair[1], prefix)
 
         return update_link
 
