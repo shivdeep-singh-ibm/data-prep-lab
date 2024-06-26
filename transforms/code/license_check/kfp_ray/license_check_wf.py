@@ -28,7 +28,7 @@ task_image = "quay.io/dataprep1/data-prep-kit/license_check-ray:0.4.0.dev6"
 # components
 base_kfp_image = "quay.io/dataprep1/data-prep-kit/kfp-data-processing:0.2.0.dev6"
 
-component_spec_path = "../../../../../kfp/kfp_ray_components/"
+component_spec_path = "../../../../kfp/kfp_ray_components/"
 
 # compute execution parameters. Here different tranforms might need different implementations. As
 # a result, instead of creating a component we are creating it in place here.
