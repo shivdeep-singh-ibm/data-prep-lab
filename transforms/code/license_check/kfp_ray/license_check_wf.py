@@ -84,9 +84,6 @@ else:
     run_id = dsl.RUN_ID_PLACEHOLDER
 
 
-compute_exec_params_op = comp.func_to_container_op(
-    func=ComponentUtils.default_compute_execution_params, base_image=base_kfp_image
-)
 # create Ray cluster
 create_ray_op = comp.load_component_from_file(component_spec_path + "createRayClusterComponent.yaml")
 # execute job
