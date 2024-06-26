@@ -36,7 +36,7 @@ setup: workflow-venv
 
 .PHONY: workflow-test
 workflow-test: setup
-	$(MAKE) .workflows.test-pipeline TRANSFORM_SRC=${SRC_DIR} PIPELINE_FILE=noop_wf.yaml
+	$(MAKE) .workflows.test-pipeline TRANSFORM_SRC=${SRC_DIR} PIPELINE_FILE=license_check_wf.yaml
 
 .PHONY: workflow-upload
 workflow-upload: setup
