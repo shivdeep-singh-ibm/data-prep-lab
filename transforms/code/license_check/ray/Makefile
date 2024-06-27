@@ -42,7 +42,7 @@ publish-dist:: .defaults.publish-dist
 
 run-cli-ray-sample:.
 	$(MAKE) RUN_FILE=$(TRANSFORM_NAME)_transform_ray.py \
-                RUN_ARGS="--run_locally True --data_local_config \"{ 'input_folder' : '../test-data/input', 'output_folder' : '../output'}\"  \
+                RUN_ARGS="--run_locally True --data_local_config \"{ 'input_folder' : '../../python/test-data/input', 'output_folder' : '../output'}\"  \
 		                      --lc_license_column_name license							\
     	                    --lc_licenses_file ../test-data/sample_approved_licenses.json" 					\
 	.transforms.run-src-file

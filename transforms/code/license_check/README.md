@@ -1,8 +1,6 @@
 # License Check 
 
-The License Check transform checks if the '`license` of input data is in approved/denied list as 
-per the set of [transform project conventions](../../README.md#transform-project-conventions)
-the following runtimes are available:
+The License Check transform checks if the `license` of input data is in approved/denied list. It is implemented as per the set of [transform project conventions](../../README.md#transform-project-conventions) the following runtimes are available:
 
 * [python](python/README.md) - provides the base python-based transformation 
 implementation.

@@ -19,7 +19,7 @@ from data_processing_ray.runtime.ray import RayTransformLauncher
 from license_check_transform_ray import LicenseCheckRayTransformConfiguration
 
 
-input_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../test-data/input"))
+input_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../python/test-data/input"))
 output_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../output"))
 approved_licenses_file = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../test-data/sample_approved_licenses.json")
