@@ -19,11 +19,9 @@ COPY src/license_check_transform_ray.py .
 COPY src/license_check_local_ray.py local/
 
 
-COPY --chown=ray:users src/ ray_tf/src/
-COPY --chown=ray:users README.md ray_tf/
-COPY --chown=ray:users pyproject.toml ray_tf/pyproject.toml 
-RUN cd ray_tf && pip install .
-
+COPY --chown=ray:users src/ src/
+COPY --chown=ray:users pyproject.toml pyproject.toml 
+RUN pip install --no-cache-dir -e .
 
 # copy test
 COPY test/ test/

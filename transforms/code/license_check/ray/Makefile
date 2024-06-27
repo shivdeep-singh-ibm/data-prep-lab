@@ -34,18 +34,18 @@ setup:: .transforms.setup
 
 # distribution versions is the same as image version.
 set-versions:
-	$(MAKE) TRANSFORM_PYTHON_VERSION=${CODE_QUALITY_PYTHON_VERSION} TOML_VERSION=$(DOCKER_IMAGE_VERSION) .transforms.set-versions
+	$(MAKE) TRANSFORM_PYTHON_VERSION=${LICENSE_CHECK_RAY_VERSION} .transforms.set-versions
         
 build-dist:: set-versions .defaults.build-dist 
 
 publish-dist:: .defaults.publish-dist
 
-run-cli-sample:.
+run-cli-ray-sample:.
 	$(MAKE) RUN_FILE=$(TRANSFORM_NAME)_transform_ray.py \
                 RUN_ARGS="--run_locally True --data_local_config \"{ 'input_folder' : '../test-data/input', 'output_folder' : '../output'}\"  \
-		 --lc_license_column_name license							\
-    	 --lc_licenses_file ../test-data/sample_approved_licenses.json" 					\
-		.transforms.run-src-file
+		                      --lc_license_column_name license							\
+    	                    --lc_licenses_file ../test-data/sample_approved_licenses.json" 					\
+	.transforms.run-src-file
 
 run-local-sample: .transforms.run-local-ray-sample
 

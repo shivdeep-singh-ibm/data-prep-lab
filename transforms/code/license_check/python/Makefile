@@ -26,14 +26,12 @@ test-image:: .transforms.python-test-image
 
 run-cli-sample:
 	$(MAKE) RUN_FILE=$(TRANSFORM_NAME)_transform_python.py \
-                RUN_ARGS="--data_local_config \"{ 'input_folder' : '../test-data/input', 'output_folder' : '../test-data/output'}\"  \
+                RUN_ARGS="--data_local_config \"{ 'input_folder' : '../test-data/input', 'output_folder' : '../output'}\"  \
 		 --lc_license_column_name license							\
     	 --lc_licenses_file  ../test-data/sample_approved_licenses.json" 					\
 		.transforms.run-src-file
 
-run-local-python-sample:
-	#$(MAKE) RUN_FILE=dpk_license_check_python/$(TRANSFORM_NAME)_local_pure.py .transforms.run-src-file
-	$(MAKE) RUN_FILE=$(TRANSFORM_NAME)_local_python.py .transforms.run-src-file
+run-local-sample: .transforms.run-local-sample
 
 build:: build-dist image
 
@@ -45,7 +43,7 @@ setup:: .transforms.setup
 
 # distribution versions is the same as image version.
 set-versions:
-	$(MAKE) TRANSFORM_PYTHON_VERSION=${CODE_QUALITY_PYTHON_VERSION} TOML_VERSION=$(DOCKER_IMAGE_VERSION) .transforms.set-versions 
+	$(MAKE) TRANSFORM_PYTHON_VERSION=${LICENSE_CHECK_PYTHON_VERSION} .transforms.set-versions 
         
 build-dist:: set-versions .defaults.build-dist 
 

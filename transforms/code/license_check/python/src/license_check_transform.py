@@ -25,6 +25,14 @@ logger = get_logger(__name__)
 
 LICENSE_CHECK_PARAMS = "license_check_params"
 
+shortname = "lc"
+CLI_PREFIX = f"{shortname}_"
+LICENSE_COLUMN_NAME_KEY = f"{CLI_PREFIX}license_column_name"
+DENY_LICENSES_KEY = f"{CLI_PREFIX}deny_licenses"
+LICENSES_FILE_KEY = f"{CLI_PREFIX}licenses_file"
+ALLOW_NO_LICENSE_KEY = f"{CLI_PREFIX}allow_no_license"
+LICENSE_COLUMN_DEFAULT = "license"
+
 
 def _get_supported_licenses(license_file: str, data_access: DataAccess) -> list[str]:
     logger.info(f"Getting supported licenses from file {license_file}")
@@ -46,14 +54,18 @@ class LicenseCheckTransform(AbstractTableTransform):
     def __init__(self, config: dict):
         super().__init__(config)
 
-        self.license_check = config.get(LICENSE_CHECK_PARAMS)
-        if not self.license_check:
-            raise ValueError(f"Invalid Argument: cannot create LicenseCheckTransform object.")
-        logger.debug(f"LICENSE_CHECK_PARAMS: {self.license_check}")
-        self.license_column = self.license_check["license_column_name"]
-        allow_no_license = self.license_check["allow_no_license"]
-        licenses = self.license_check["licenses"]
-        deny = self.license_check["deny"]
+        try:
+            self.license_check = config.get(LICENSE_CHECK_PARAMS)
+            self.license_column = self.license_check.get("license_column_name", LICENSE_COLUMN_DEFAULT)
+            allow_no_license = self.license_check.get("allow_no_license", False)
+            licenses = self.license_check.get("licenses", None)
+            if not licenses or not isinstance(licenses, list):
+                raise ValueError("license list not found.")
+            deny = self.license_check.get("deny", False)
+            logger.debug(f"LICENSE_CHECK_PARAMS: {self.license_check}")
+        except Exception as e:
+            raise ValueError(f"Invalid Argument: cannot create LicenseCheckTransform object: {e}.")
+
         if not deny:
             self.transformer = AllowLicenseStatusTransformer(
                 license_column=self.license_column,
@@ -74,7 +86,7 @@ class LicenseCheckTransform(AbstractTableTransform):
         """
         TransformUtils.validate_columns(table=table, required=[self.license_column])
         new_table = self.transformer.transform(table)
-        return [new_table], {"n_files": 1}
+        return [new_table], {}
 
 
 class LicenseCheckTransformConfiguration(TransformConfiguration):
@@ -83,48 +95,48 @@ class LicenseCheckTransformConfiguration(TransformConfiguration):
 
     def add_input_params(self, parser: ArgumentParser) -> None:
         parser.add_argument(
-            "--lc_license_column_name",
+            f"--{LICENSE_COLUMN_NAME_KEY}",
             required=False,
             type=str,
-            dest="license_column_name",
-            default="contents",
+            default=LICENSE_COLUMN_DEFAULT,
             help="Name of the column holds the data to process",
         )
         parser.add_argument(
-            "--lc_allow_no_license",
+            f"--{ALLOW_NO_LICENSE_KEY}",
             required=False,
-            dest="allow_no_license",
             action="store_true",
             default=False,
             help="allow entries with no associated license (default: false)",
         )
         parser.add_argument(
-            "--lc_licenses_file",
+            f"--{LICENSES_FILE_KEY}",
             required=True,
-            dest="licenses_file",
             type=str,
             help="S3 or local path to allowed/denied licenses JSON file",
         )
         parser.add_argument(
-            "--lc_deny_licenses",
+            f"--{DENY_LICENSES_KEY}",
             required=False,
-            dest="deny",
             action="store_true",
             default=False,
             help="allow all licences except those in licenses_file (default: false)",
         )
+        # Create the DataAccessFactor to use CLI args
+        self.daf = DataAccessFactory(CLI_PREFIX, False)
+        # Add the DataAccessFactory parameters to the transform's configuration parameters.
+        self.daf.add_input_params(parser)
 
     def apply_input_params(self, args: Namespace) -> bool:
         dargs = vars(args)
+        data_access = self.daf.create_data_access()
+        deny = dargs.get(DENY_LICENSES_KEY, False)
+        license_list_file = dargs.get(LICENSES_FILE_KEY)
         # Read licenses from allow-list or deny-list
-        data_access = DataAccessFactory("lc_", False).create_data_access()
-        deny = dargs.get("deny")
-        license_list_file = dargs.get("licenses_file")
         licenses = _get_supported_licenses(license_list_file, data_access)
         self.params = {
             LICENSE_CHECK_PARAMS: {
-                "license_column_name": dargs.get("license_column_name"),
-                "allow_no_license": dargs.get("allow_no_license"),
+                "license_column_name": dargs.get(LICENSE_COLUMN_NAME_KEY),
+                "allow_no_license": dargs.get(ALLOW_NO_LICENSE_KEY),
                 "licenses": licenses,
                 "deny": deny,
             }

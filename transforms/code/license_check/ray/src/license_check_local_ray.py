@@ -49,7 +49,7 @@ params = {
     "runtime_job_id": "job_id",
     "runtime_creation_delay": 0,
     "runtime_code_location": ParamsUtils.convert_to_ast(code_location),
-    # code quality configuration
+    # license check configuration
     "lc_license_column_name": "license",
     "lc_licenses_file": approved_licenses_file,
 }

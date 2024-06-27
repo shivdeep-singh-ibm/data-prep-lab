@@ -37,11 +37,14 @@ These targets will activate the virtual environment and set up any configuration
 Use the `-n` option of `make` to see the detail of what is done to run the sample.
 
 For example, 
+
 ```shell
 make run-cli-ray-sample
 ...
 ```
+
 Then 
+
 ```shell
 ls output
 ```

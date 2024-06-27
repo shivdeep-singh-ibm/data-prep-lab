@@ -31,9 +31,11 @@ If the license is approved, the license_status column contains True; otherwise F
 
 ## Running
 
-### Launched Command Line Options 
+### Launcher Command Line Options 
 
-When running the transform with the TransformLauncher, the following command line arguments are available in addition to the options provided by the python launcher.
+The following command line arguments are available in addition to 
+the options provided by the [ray launcher](../../../../data-processing-lib/doc/ray-launcher-options.md)
+and the [python launcher](../../../../data-processing-lib/doc/python-launcher-options.md).
 
   --lc_license_column_name LICENSE_COLUMN_NAME
                         Name of the column holds the data to process
@@ -48,6 +50,7 @@ When running the transform with the TransformLauncher, the following command lin
 To run the samples, use the following make targets
 
 `run-cli-sample`
+
 `run-local-python-sample` 
 
 These targets will activate the virtual environment and set up any configuration needed. Use the -n option of make to see the detail of what is done to run the sample.

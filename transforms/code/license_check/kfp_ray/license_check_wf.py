@@ -98,7 +98,7 @@ TASK_NAME: str = "license_check"
 # Pipeline to invoke execution on remote resource
 @dsl.pipeline(
     name=TASK_NAME + "-ray-pipeline",
-    description="Pipeline for code quality task",
+    description="Pipeline for license check task",
 )
 def license_check(
     # Ray cluster

@@ -20,7 +20,7 @@ from license_check_transform import LicenseCheckTransformConfiguration
 
 
 input_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../test-data/input"))
-output_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../test-data/output"))
+output_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../output"))
 approved_license_file = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../test-data/sample_approved_licenses.json")
 )
@@ -42,7 +42,7 @@ params = {
     "runtime_pipeline_id": "pipeline_id",
     "runtime_job_id": "job_id",
     "runtime_code_location": ParamsUtils.convert_to_ast(code_location),
-    # code quality configuration
+    # license check configuration
     "lc_license_column_name": "license",
     "lc_licenses_file": approved_license_file,
 }

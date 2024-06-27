@@ -16,6 +16,7 @@ from data_processing.test_support.launch.transform_test import (
     AbstractTransformLauncherTest,
 )
 from data_processing_ray.runtime.ray import RayTransformLauncher
+from license_check_transform import LICENSE_COLUMN_NAME_KEY, LICENSES_FILE_KEY
 from license_check_transform_ray import LicenseCheckRayTransformConfiguration
 
 
@@ -32,8 +33,8 @@ class TestPythonLicenseCheck(AbstractTransformLauncherTest):
         launcher = RayTransformLauncher(LicenseCheckRayTransformConfiguration())
         config = {
             "run_locally": True,
-            "lc_license_column_name": "license",
-            "lc_licenses_file": os.path.join(basedir, "sample_approved_licenses.json"),
+            LICENSE_COLUMN_NAME_KEY: "license",
+            LICENSES_FILE_KEY: os.path.join(basedir, "sample_approved_licenses.json"),
         }
         fixtures.append((launcher, config, basedir + "/input", basedir + "/expected"))
         return fixtures

@@ -17,6 +17,8 @@ from data_processing.test_support.transform import AbstractTableTransformTest
 from data_processing.transform import get_transform_config
 from license_check_transform import (
     LICENSE_CHECK_PARAMS,
+    LICENSE_COLUMN_NAME_KEY,
+    LICENSES_FILE_KEY,
     LicenseCheckTransform,
     LicenseCheckTransformConfiguration,
 )
@@ -41,7 +43,7 @@ class TestLicenseCheckTransform(AbstractTableTransformTest):
             "license_status": [True, False],
         }
     )
-    expected_metadata_list = [{"n_files": 1}, {}]
+    expected_metadata_list = [{}, {}]
 
     def get_test_transform_fixtures(self) -> list[tuple]:
         test_src_dir = os.path.abspath(os.path.dirname(__file__))
@@ -52,9 +54,9 @@ class TestLicenseCheckTransform(AbstractTableTransformTest):
             # When running outside the Ray orchestrator and its DataAccess/Factory, there is
             # no Runtime class to load the domains and the Transform must do it itself using
             # the lang_select_local_config for this test.
-            f"--lc_license_column_name",
+            f"--{LICENSE_COLUMN_NAME_KEY}",
             "license",
-            f"--lc_licenses_file",
+            f"--{LICENSES_FILE_KEY}",
             approved_license_file,
         ]
 
