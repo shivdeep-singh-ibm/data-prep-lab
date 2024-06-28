@@ -24,6 +24,10 @@ RUN pip install --no-cache-dir -e .
 # Added to enable running test 
 RUN cp src/license_check_transform_python.py . 
 
+# copy source data
+COPY ./src/license_check_transform_python.py .
+COPY ./src/license_check_local.py local/
+
 # copy test
 COPY test/ test/
 COPY test-data/ test-data/
