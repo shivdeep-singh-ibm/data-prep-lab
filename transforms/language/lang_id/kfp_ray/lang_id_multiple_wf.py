@@ -17,13 +17,13 @@ import kfp.dsl as dsl
 from workflow_support.compile_utils import ONE_HOUR_SEC, ONE_WEEK_SEC, ComponentUtils
 
 
-task_image = "quay.io/dataprep1/data-prep-kit/lang_id-ray:0.2.0.dev6"
+task_image = "quay.io/dataprep1/data-prep-kit/lang_id-ray:0.2.1.dev0"
 
 # the name of the job script
 EXEC_SCRIPT_NAME: str = "lang_id_transform_ray.py"
 
 # components
-base_kfp_image = "quay.io/dataprep1/data-prep-kit/kfp-data-processing:0.2.0.dev6"
+base_kfp_image = "quay.io/dataprep1/data-prep-kit/kfp-data-processing:0.2.1.dev0"
 
 # path to kfp component specifications files
 component_spec_path = "../../../../kfp/kfp_ray_components/"
@@ -120,7 +120,7 @@ def lang_id(
     lang_id_model_credential: str = "PUT YOUR OWN HUGGINGFACE CREDENTIAL",
     lang_id_model_kind: str = "fasttext",
     lang_id_model_url: str = "facebook/fasttext-language-identification",
-    lang_id_content_column_name: str = "contents",
+    lang_id_content_column_name: str = "text",
     # additional parameters
     additional_params: str = '{"wait_interval": 2, "wait_cluster_ready_tmout": 400, "wait_cluster_up_tmout": 300, "wait_job_ready_tmout": 400, "wait_print_tmout": 30, "http_retries": 5}',
 ):
