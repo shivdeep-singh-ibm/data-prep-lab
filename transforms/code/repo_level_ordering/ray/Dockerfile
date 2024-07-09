@@ -20,7 +20,6 @@ RUN pip install --no-cache-dir -e .
 # copy source data
 COPY ./src/repo_level_order_transform_ray.py .
 COPY ./src/repo_level_order_local_ray.py local/
-COPY ./src/local_ray_store_ray.py local/
 COPY ./src/repo_level_order_s3_ray.py local/
 
 # copy test
