@@ -1,4 +1,3 @@
-import logging
 import os
 from typing import List, Tuple
 
@@ -6,33 +5,8 @@ import pandas as pd
 import pyarrow as pa
 import ray
 from data_processing.utils import get_logger
-from data_processing_ray.runtime.ray import RayUtils
-from pyarrow.fs import FileSelector, FileType, LocalFileSystem, S3FileSystem
+from pyarrow.fs import LocalFileSystem, S3FileSystem
 from pyarrow.parquet import ParquetDataset, write_table
-
-
-class DataAccessAlternative:
-    def __init__(self, key=None, secret=None, endpoint=None):
-        if key and secret:
-            self.fs = S3FileSystem(
-                access_key=key,
-                secret_key=secret,
-                endpoint_override=endpoint,
-                request_timeout=20,
-                connect_timeout=20,
-            )
-        else:
-            self.fs = LocalFileSystem()
-
-    def get_table(self, input_file_path):
-        table = ParquetDataset(filesystem=self.fs, path_or_paths=input_file_path).read()
-        return table, 0
-
-    def save_table(self, output_file_path, out_table):
-        out_folder = output_file_path.replace(os.path.basename(output_file_path), "")
-        self.fs.create_dir(path=out_folder)
-        write_table(table=out_table, where=output_file_path, filesystem=self.fs)
-        return len(out_table), {}, 0
 
 
 class GroupByRepo:
