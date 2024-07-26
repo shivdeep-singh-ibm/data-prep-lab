@@ -108,16 +108,10 @@ class GroupByRepoActor(GroupByRepo):
     """
 
     def __init__(self, params: dict):
-        if params["data_access_creds"] is not None:
-            access_key = params["data_access_creds"]["access_key"]
-            secret_key = params["data_access_creds"]["secret_key"]
-            url = params["data_access_creds"]["url"]
-        else:
-            access_key, secret_key, url = (None, None, None)
         super().__init__(
             params["repo_column_name"],
             params["output_dir"],
-            None,  # params["logger"],
-            params["data_access_factory"].create_data_access(),  # DataAccessAlternative(access_key, secret_key, url),
+            None,
+            params["data_access_factory"].create_data_access(),
             params["mapper"],
         )

@@ -16,15 +16,10 @@ from argparse import ArgumentParser, Namespace
 from typing import Any
 
 import pyarrow as pa
-import ray
 from data_processing.data_access import DataAccessFactoryBase
 from data_processing.transform import AbstractTableTransform, TransformConfiguration
 from data_processing.utils import CLIArgumentProvider, get_logger
-from data_processing_ray.runtime.ray import (
-    DefaultRayTransformRuntime,
-    RayTransformLauncher,
-    RayUtils,
-)
+from data_processing_ray.runtime.ray import DefaultRayTransformRuntime, RayUtils
 from data_processing_ray.runtime.ray.runtime_configuration import (
     RayTransformRuntimeConfiguration,
 )
@@ -32,26 +27,18 @@ from dpk_repo_level_order.internal.store.store_factory import (
     create_store,
     create_store_params,
     init_store_params,
-    store_type_value_local,
-    store_type_value_ray,
-    store_type_value_s3,
 )
 from ray.actor import ActorHandle
 
 
 short_name = "repo_lvl"
 cli_prefix = f"{short_name}_"
-pwd_key = "pwd"
-pwd_cli_param = f"{cli_prefix}{pwd_key}"
 
 grouping_column_key = "grouping_column"
 store_params_key = "store_params"
 
 store_type_key = "store_type"
 store_dir_key = "store_backend_dir"
-store_s3_secret_key = "other_s3_secret"
-store_s3_keyid_key = "other_s3_keyid"
-store_s3_url_key = "other_s3_url"
 store_ray_cpus_key = "store_ray_cpus"
 store_ray_nworkers_key = "store_ray_nworkers"
 
@@ -61,15 +48,12 @@ sorting_algo_key = "sorting_algo"
 output_by_langs_key = "output_by_langs"
 output_superrows_key = "combine_rows"
 
-
-@ray.remote
-def add_file(store, group, file_name):
-    store.put(group, file_name)
+group_batch_size = 50
 
 
 class RepoLevelOrderTransform(AbstractTableTransform):
     """
-    Implements a simple copy of a pyarrow Table.
+    Prepares a list of groups in the file and add them to store.
     """
 
     def __init__(self, config: dict[str, Any]):
@@ -90,29 +74,54 @@ class RepoLevelOrderTransform(AbstractTableTransform):
         self.grouping_column = config.get(grouping_column_key)
         store_params = config.get(store_params_key)
         self.store = create_store(store_params)
+        self.group_batch_size = group_batch_size
+
+    def _create_batches(self, data, batch_size=1):
+        batch = []
+        batches = []
+        iterator = iter(data)
+        try:
+            while True:
+                for _ in range(batch_size):
+                    batch.append(next(iterator))
+                batches.append(batch)
+                batch = []
+        except StopIteration:
+            if batch:
+                batches.append(batch)
+        return batches
 
     def transform(self, table: pa.Table, file_name: str = None) -> tuple[list[pa.Table], dict[str, Any]]:
         """
-        Put Transform-specific to convert one Table to 0 or more tables. It also returns
-        a dictionary of execution statistics - arbitrary dictionary
-        This implementation makes no modifications so effectively implements a copy of the
-        input parquet to the output folder, without modification.
+        This step doesn't prepare data to write tables, this step is used to do groupby
+        with respect to `self.grouping_column` and upda the group and file to
+        a store referenced by self.store.
         """
         self.logger.debug(f"Transforming one table with {len(table)} rows")
-        grouped_dataframe = table.to_pandas().groupby(self.grouping_column)
+        grouped = table.group_by(self.grouping_column)
+        repo_groups = grouped.aggregate([(self.grouping_column, "count")])[self.grouping_column].to_pylist()
 
-        results = []
-        for group, _ in grouped_dataframe:
-            # This supports only flat folder structure, so all
-            # files should be in the same folder
-            # since store uses filesystem as backend
-            # can't store full path in store since, store is currently flat filesystem.
-            file_name = os.path.basename(file_name)
-            # self.store.put(group, file_name)
-            results.append(add_file.remote(self.store, group, file_name))
+        batch_size = self.group_batch_size
+        if len(repo_groups) < batch_size:
+            batch_size = len(repo_groups)
 
-        ray.get(results)
-        stats = {"identified_groups": len(grouped_dataframe)}
+        batches = self._create_batches(repo_groups, batch_size)
+
+        for batch in batches:
+            grp_flow = {}
+            for group in batch:
+                # This supports only flat folder structure, so all
+                # files should be in the same folder
+                # since store uses filesystem as backend
+                # can't store full path in store since,
+                # store is currently flat filesystem.
+                file_name = os.path.basename(file_name)
+                grp_flow[group] = file_name
+                self.logger.debug(f"Updating {group} to store")
+
+            self.store.put_dict(grp_flow)
+
+        stats = {"identified_groups": len(repo_groups)}
         self.logger.debug(f"Transformed one table with {len(table)} rows")
         metadata = {"nfiles": 1, "nrows": len(table)} | stats
         return [], metadata
@@ -172,6 +181,7 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
         self.store_params = self.params[store_params_key]
         self.logger.info("<= get_transform_config")
         self.start_time = datetime.datetime.now()
+        self.repo_column_name = self.params[grouping_column_key]
         return self.params
 
     def _prepare_mapper_function(self):
@@ -214,6 +224,14 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
         repo_mapper_func = get_transforming_func(**mapper_function_params)
         return repo_mapper_func
 
+    def _prepare_inputs(self):
+        store = create_store(self.store_params)
+        files_location = self.input_folder
+        p_input = []
+        for repo, files in store.items_kv():
+            p_input.append((repo, [f"{files_location}/{file}" for file in files]))
+        return p_input
+
     def _group_and_sort(self):
 
         self.logger.info(f"Stage 1 Finished in {datetime.datetime.now() - self.start_time}.")
@@ -221,17 +239,7 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
         from dpk_repo_level_order.internal.repo_grouper import GroupByRepoActor
         from ray.util import ActorPool
 
-        store = create_store(self.store_params)
-        # store = FSStore(self.store_backend_dir)
-        # We need input path here
-        files_location = self.input_folder
-        output_location = self.output_folder
-        # If I normalised values in store, then there is no need of this generating full path. TODO
-        p_input = []
-        for repo in store.items():
-            p_input.append((repo, list(map(lambda x: f"{files_location}/{x}", store.get(repo)))))
-
-        self.logger.info(f"Processing {len(p_input)} repos with {self.ray_workers} workers")
+        p_input = self._prepare_inputs()
         if self.stage_one_only:
             return {"nrepos": len(p_input)}
 
@@ -239,10 +247,8 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
         processors = RayUtils.create_actors(
             clazz=GroupByRepoActor,
             params={
-                "repo_column_name": "repo_name",
-                "output_dir": output_location,
-                "logger": None,  # may be this logger causes the arguments to be non serializable
-                "data_access_creds": self.s3_cred,
+                "repo_column_name": self.repo_column_name,
+                "output_dir": self.output_folder,
                 "data_access_factory": self.daf,
                 "mapper": repo_mapper_func,
             },
@@ -251,6 +257,7 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
         )
 
         p_pool = ActorPool(processors)
+        self.logger.info(f"Processing {len(p_input)} repos with {self.ray_workers} workers")
         replies = list(p_pool.map_unordered(lambda a, x: a.process.remote(x[0], x[1]), p_input))
         return {"nrepos": len(p_input)}
 

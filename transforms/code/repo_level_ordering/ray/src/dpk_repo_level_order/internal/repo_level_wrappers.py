@@ -66,22 +66,24 @@ def dominant_lang_per_repo(table: pa.Table, filename: str) -> str:
     return os.path.join(lang_name, filename)
 
 
-def dominant_lang_detector(table, file_name):
-    import random
-
-    folder = random.choice(["Java", "Python", "Go"])
-    return os.path.join(folder, file_name)
-
-
 def superrow_table(table: pa.Table, repo_column_name: str) -> pa.Table:
     """
     This function combines all the rows of a parquet table into a single row
     and returns a modified table.
     """
-    table_df = table.to_pandas()
-    super_row = table_df["contents"].tolist()
-    repo_doc_ids = table_df["document_id"].tolist()
-    lang_dist = table_df["language"].value_counts().to_dict()
+
+    def lang_distribution(grouping_column):
+        """returns the language distribution dictionary like: {'Markdown': 1, 'Tex': 1, 'unknown': 11}"""
+        grouped = table.group_by(grouping_column)
+        aggregated = grouped.aggregate([(grouping_column, "count")])
+        lang_dist = {}
+        for k, v in zip(aggregated[grouping_column], aggregated[f"{grouping_column}_count"]):
+            lang_dist[k.as_py()] = v.as_py()
+        return lang_dist
+
+    super_row = table.column("contents").to_pylist()
+    repo_doc_ids = table.column("document_id").to_pylist()
+    lang_dist = lang_distribution("language")
 
     document_id = (str(uuid.uuid4()),)
     contents = ("".join(super_row),)
