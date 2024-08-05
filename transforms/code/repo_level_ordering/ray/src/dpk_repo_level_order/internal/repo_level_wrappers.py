@@ -12,6 +12,7 @@ from dpk_repo_level_order.internal.sorting.semantic_ordering import (
     sort_by_path,
     sort_sem,
 )
+from func_timeout.exceptions import FunctionTimedOut
 
 
 SORT_BY_PATH = "SORT_BY_PATH"
@@ -41,10 +42,23 @@ def get_sorting_func(
         sort_by = sort_by_path
         logger.info(f"sort by path enabled")
 
-    def sorter(table: pa.Table) -> pa.Table:
+    def sorter(file_name, table: pa.Table) -> pa.Table:
         df = table.to_pandas()
-        sorted_df = sort_by(df=df, logger=logger, title_column_name=title_column_name)
-        return pa.Table.from_pandas(sorted_df, preserve_index=False)
+        try:
+            sorted_df = sort_by(df=df, logger=logger, title_column_name=title_column_name)
+            return pa.Table.from_pandas(sorted_df, preserve_index=False)
+        except FunctionTimedOut as e:
+            logger.error(
+                f"We got an exception while sorting [{file_name}].\n Exception: {e.__class__.__name__}.\n Falling back to default sort_by_path"
+            )
+            sorted_df = sort_by_path(df=df, logger=logger, title_column_name=title_column_name)
+            return pa.Table.from_pandas(sorted_df, preserve_index=False)
+        except Exception as e:
+            logger.error(
+                f"We got an exception while sorting [{file_name}].\n Exception: {e.__class__.__name__}.\n Falling back to default sort_by_path"
+            )
+            sorted_df = sort_by_path(df=df, logger=logger, title_column_name=title_column_name)
+            return pa.Table.from_pandas(sorted_df, preserve_index=False)
 
     return sorter
 
@@ -114,7 +128,7 @@ def get_transforming_func(sorting_func=None, superrows_func=None, filename_func=
     def my_transform(table, file_name):
         out_table = table
         if sorting_func:
-            out_table = sorting_func(table)
+            out_table = sorting_func(file_name, table)
         if filename_func:
             file_name = filename_func(table, file_name)
         if superrows_func:
