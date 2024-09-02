@@ -20,6 +20,8 @@ from repo_level_order_transform import RepoLevelOrderRayTransformConfiguration
 
 # create parameters
 input_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "test-data", "input"))
+# input_folder = "/home/shivdeep/workspace/projects/current/repo-lvl-22july/transforms/code/repo_level_ordering/ray/8aug_sort_semantic_lang"
+# input_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../../dpk-sd/transforms/code/repo_level_ordering/ray/test-data/input_/"))
 output_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "output"))
 local_conf = {
     "input_folder": input_folder,
@@ -35,7 +37,7 @@ params = {
     "data_local_config": ParamsUtils.convert_to_ast(local_conf),
     # orchestrator
     "runtime_worker_options": ParamsUtils.convert_to_ast(worker_options),
-    "runtime_num_workers": 2,
+    "runtime_num_workers": 20,
     "runtime_pipeline_id": "pipeline_id",
     "runtime_job_id": "job_id",
     "runtime_creation_delay": 0,
@@ -45,7 +47,7 @@ params = {
 
 repo_level_params = {
     "repo_lvl_sorting_algo": "SORT_SEMANTIC_NORMALISED",
-    "repo_lvl_store_type": "local",
+    "repo_lvl_store_type": "ray",
     "repo_lvl_store_backend_dir": "/tmp/mystore",
 }
 

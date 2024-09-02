@@ -44,6 +44,10 @@ def get_sorting_func(
 
     def sorter(file_name, table: pa.Table) -> pa.Table:
         df = table.to_pandas()
+        print(f"SD: df {file_name} size: {len(df)}")
+        if len(df) < 2:
+            print(f"not sorting {file_name}")
+            return table
         try:
             sorted_df = sort_by(df=df, logger=logger, title_column_name=title_column_name)
             return pa.Table.from_pandas(sorted_df, preserve_index=False)
@@ -86,7 +90,13 @@ def superrow_table(table: pa.Table, repo_column_name: str) -> pa.Table:
     and returns a modified table.
     """
 
-    def lang_distribution(grouping_column):
+    def language_distribution_2(table, language_column="language", size_column="size"):
+        df = table.to_pandas()
+        language_sums = df.groupby(language_column)[size_column].sum()
+        dominant_lang = language_sums.idxmax()
+        return language_sums.to_dict(), dominant_lang, language_sums[dominant_lang]
+
+    def lang_distribution(table, grouping_column):
         """returns the language distribution dictionary like: {'Markdown': 1, 'Tex': 1, 'unknown': 11}"""
         grouped = table.group_by(grouping_column)
         aggregated = grouped.aggregate([(grouping_column, "count")])
@@ -97,29 +107,60 @@ def superrow_table(table: pa.Table, repo_column_name: str) -> pa.Table:
 
     super_row = table.column("contents").to_pylist()
     repo_doc_ids = table.column("document_id").to_pylist()
-    lang_dist = lang_distribution("language")
+    from joblib import Parallel, delayed
 
+    def generate_distributions():
+        for funcs in [lang_distribution, language_distribution_2]:
+            yield delayed(funcs)(table, "language")
+
+    d_gen = Parallel(n_jobs=2, return_as="generator")(generate_distributions())
+    lang_dist = next(d_gen)
+    # distribution_by_size, dominant_lang_by_size, dominant_language_size = language_distribution_2(table, "language")
+    distribution_by_size, dominant_lang_by_size, dominant_language_size = next(d_gen)
     document_id = (str(uuid.uuid4()),)
+
     contents = ("".join(super_row),)
     repo_document_ids = (" ".join(repo_doc_ids),)
-
     names = [
         "document_id",
         "contents",
         "repo_document_ids",
         "repo_name",
         "lang_distribution",
+        "distribution_by_size",
+        "dominant_lang_by_size",
+        "dominant_language_size",
     ]
-    new_table = pa.table(
-        [
-            pa.array(document_id),
-            pa.array(contents),
-            pa.array(repo_document_ids),
-            pa.array([repo_column_name]),
-            pa.array([lang_dist]),
-        ],
-        names=names,
-    )
+    try:
+
+        new_table = pa.table(
+            [
+                pa.array(document_id),
+                pa.array(contents),
+                pa.array(repo_document_ids),
+                pa.array([repo_column_name]),
+                pa.array([lang_dist]),
+                pa.array([distribution_by_size]),
+                pa.array([dominant_lang_by_size]),
+                pa.array([dominant_language_size]),
+            ],
+            names=names,
+        )
+    except:
+        print(f"superrows error: {repo_column_name} could not be processed. contents_length: {len(contents[0])}")
+        new_table = pa.table(
+            [
+                pa.array([]),
+                pa.array([]),
+                pa.array([]),
+                pa.array([]),
+                pa.array([]),
+                pa.array([]),
+                pa.array([]),
+                pa.array([]),
+            ],
+            names=names,
+        )
 
     return new_table
 

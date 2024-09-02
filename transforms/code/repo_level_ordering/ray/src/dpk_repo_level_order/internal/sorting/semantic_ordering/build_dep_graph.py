@@ -91,12 +91,15 @@ def get_parser_results(
             logger.exception(f"method - get_parser_results: parser finding dependencies failed for {full_file_name}")
             unparsed_files.append(full_file_name)
     logger.info(f"Unparsed files - {len(unparsed_files)} out of total {len(files)} files")
-    for ext, language in ext_parsers_map:
-        parser = ext_parsers_map[(ext, language)]
-        if parser:
-            resolve_dependencies(ext, parser, analysis, files_set)
-            parser.after_generated_file_results(analysis)
-            parser_results.update(parser.results)
+    try:
+        for ext, language in ext_parsers_map:
+            parser = ext_parsers_map[(ext, language)]
+            if parser:
+                resolve_dependencies(ext, parser, analysis, files_set)
+                parser.after_generated_file_results(analysis)
+                parser_results.update(parser.results)
+    except Exception as e:
+        pass
     return parser_results
 
 

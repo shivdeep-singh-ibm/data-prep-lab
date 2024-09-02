@@ -253,7 +253,7 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
                 "mapper": repo_mapper_func,
             },
             actor_options={"num_cpus": self.ray_num_cpus},
-            n_actors=self.ray_workers,
+            n_actors=int(self.ray_workers),
         )
 
         p_pool = ActorPool(processors)
