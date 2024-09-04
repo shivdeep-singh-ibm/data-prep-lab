@@ -51,11 +51,15 @@ class GroupByRepo:
 
         repo = sanitize_path(repo)
         tables = self.table_mapper(repo_table, repo)
+        from joblib import Parallel, delayed
 
-        for out_table, filename in tables:
+        def write_gen():
+            for out_table, filename in tables:
+                self.logger.info(f"Write {filename}, tables: {len(out_table)}")
+                yield delayed(self._write_parquet)(out_table, filename)
 
-            self.logger.info(f"Write {filename}, tables: {len(out_table)}")
-            self._write_parquet(out_table, filename)
+        gen = Parallel(n_jobs=2, return_as="generator", backend="threading")(write_gen())
+        [g for g in gen]
 
     def _write_parquet(self, table, repo_name):
         # since we already know the repo

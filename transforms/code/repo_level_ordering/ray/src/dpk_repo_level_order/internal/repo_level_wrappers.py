@@ -101,9 +101,14 @@ def superrow_table(table: pa.Table, repo_column_name: str) -> pa.Table:
         grouped = table.group_by(grouping_column)
         aggregated = grouped.aggregate([(grouping_column, "count")])
         lang_dist = {}
+        max_key = None
+        max_val = 0
         for k, v in zip(aggregated[grouping_column], aggregated[f"{grouping_column}_count"]):
             lang_dist[k.as_py()] = v.as_py()
-        return lang_dist
+            if v.as_py() > max_val:
+                max_val = v.as_py()
+                max_key = k.as_py()
+        return lang_dist, max_key
 
     super_row = table.column("contents").to_pylist()
     repo_doc_ids = table.column("document_id").to_pylist()
@@ -114,7 +119,8 @@ def superrow_table(table: pa.Table, repo_column_name: str) -> pa.Table:
             yield delayed(funcs)(table, "language")
 
     d_gen = Parallel(n_jobs=2, return_as="generator")(generate_distributions())
-    lang_dist = next(d_gen)
+    lang_dist, dominat_lang_by_count = next(d_gen)
+    print(dominat_lang_by_count)
     # distribution_by_size, dominant_lang_by_size, dominant_language_size = language_distribution_2(table, "language")
     distribution_by_size, dominant_lang_by_size, dominant_language_size = next(d_gen)
     document_id = (str(uuid.uuid4()),)
@@ -130,6 +136,7 @@ def superrow_table(table: pa.Table, repo_column_name: str) -> pa.Table:
         "distribution_by_size",
         "dominant_lang_by_size",
         "dominant_language_size",
+        "dominant_language_by_count",
     ]
     try:
 
@@ -143,6 +150,7 @@ def superrow_table(table: pa.Table, repo_column_name: str) -> pa.Table:
                 pa.array([distribution_by_size]),
                 pa.array([dominant_lang_by_size]),
                 pa.array([dominant_language_size]),
+                pa.array([dominat_lang_by_count]),
             ],
             names=names,
         )
@@ -167,15 +175,45 @@ def superrow_table(table: pa.Table, repo_column_name: str) -> pa.Table:
 
 def get_transforming_func(sorting_func=None, superrows_func=None, filename_func=None):
     def my_transform(table, file_name):
+        # +sd
+        # allow only these languages
+        allowed_languages = ["Python", "Java"]
+        programming_languages = table.column("language").to_pylist()
+
+        # convert both lists to lowercase for case-insensitive comparison
+        allowed_languages = [language.lower() for language in allowed_languages]
+        programming_languages = [language.lower() for language in programming_languages]
+
+        # check if any of the allowed languages exist in the programming languages list
+        exists = any(language in programming_languages for language in allowed_languages)
+        if not exists:
+            return []
+            # -sd
         out_table = table
+        original_file_name = file_name
         if sorting_func:
             out_table = sorting_func(file_name, table)
+            table_before_super = out_table
+            mprefix = "multirow"
         if filename_func:
             file_name = filename_func(table, file_name)
+            prefix = "lang_detected"
+            file_name = os.path.join(prefix, file_name)
+        # detect language by size
+
+        # detect language by frequency
         if superrows_func:
             out_table = superrows_func(out_table, file_name)
+            dominant_lang_by_size = out_table.column("dominant_lang_by_size")[0].as_py()
+            second_file_name = os.path.join(str(dominant_lang_by_size), original_file_name)
+            prefix = "lang_detected_by_size"
+            second_file_name = os.path.join(prefix, second_file_name)
+
         return [
             (out_table, file_name),
+            (out_table, second_file_name),
+            (table_before_super, os.path.join(mprefix, file_name)),
+            (table_before_super, os.path.join(mprefix, second_file_name)),
         ]
 
     return my_transform
