@@ -53,7 +53,11 @@ repo_level_params = {
     "repo_lvl_store_type": "ray",
 }
 
-repo_level_flags = ["repo_lvl_output_by_langs", "repo_lvl_combine_rows", "repo_lvl_sorting_enabled"]
+repo_level_flags = [
+    "repo_lvl_output_by_langs",
+    "repo_lvl_combine_rows",
+    "repo_lvl_sorting_enabled",
+]
 
 d = ParamsUtils.dict_to_req(d=params | repo_level_params)
 sys.argv = d + [f"--{flag}" for flag in repo_level_flags]

@@ -158,3 +158,20 @@ python src/repo_level_order_transform_ray.py \
        --repo_lvl_sorting_algo SORT_SEMANTIC \
        --repo_lvl_output_by_langs True   
 ```
+
+
+## Extra Features
+
+Since this module reads input file per repo, it may result in very large number of reads of same file. This doesn't affect much when reading data locally but
+may become a big problem when reading from s3 where parallelisation may cause spike in number of iles read per second or even number of times a file is read.
+
+We have included new features to optimise this usecase. 
+
+- limiting the time taken to process each repo
+- caching input files locally, so that next time they are read from local cache on the node, instead of s3. It supports limited size cache.
+
+`--extras_min_proc_time_ms` - It can be used to slow down the processing time per repo. It is the minimum time that one repo should take to porcess so that we can limit the number of reads/per sec from S3 supported storage. It is in milliseconds.
+
+`extras_read_table_cache` - It specifies the size of cache in MB, which can be used to cache files locally.
+
+

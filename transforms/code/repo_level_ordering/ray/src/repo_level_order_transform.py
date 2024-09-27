@@ -68,6 +68,14 @@ sort_algo_default = "SORT_BY_PATH"
 output_by_lang_default = False
 superrows_default = False
 
+# extra options
+# iminimun processing timeout
+extras_prefix = "extras_"
+min_proc_time_ms_key = "min_proc_time_ms"
+min_proc_time_ms_default = 0
+# enable read table cache
+read_table_cache_key = "read_table_cache"
+
 
 class RepoLevelOrderTransform(AbstractTableTransform):
     """
@@ -237,6 +245,13 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
         self.start_time = datetime.datetime.now()
         self.repo_column_name = self.params[grouping_column_key]
         self.language_column_name = self.params[language_column_key]
+
+        # params for rate limiting and caching
+        self.extra_params = {
+            "read_table_cache_limit": self.params[read_table_cache_key],
+            "min_process_time_ms": self.params[min_proc_time_ms_key],
+        }
+        self.logger.info(f"extra params {self.extra_params}")
         return self.params
 
     def _prepare_mapper_function(self):
@@ -270,7 +285,8 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
             self.logger.info("Output by language enabled.")
             mapper_function_params = mapper_function_params | {
                 "filename_func": get_dominant_language_func(
-                    language_column_name=self.language_column_name, title_column_name="title"
+                    language_column_name=self.language_column_name,
+                    title_column_name="title",
                 ),
             }
 
@@ -304,6 +320,7 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
             return {"nrepos": len(p_input)}
 
         repo_mapper_func = self._prepare_mapper_function()
+
         processors = RayUtils.create_actors(
             clazz=GroupByRepoActor,
             params={
@@ -311,6 +328,7 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
                 "output_dir": self.output_folder,
                 "data_access_factory": self.daf,
                 "mapper": repo_mapper_func,
+                **self.extra_params,
             },
             actor_options={"num_cpus": self.ray_num_cpus},
             n_actors=self.ray_workers,
@@ -423,6 +441,22 @@ class RepoLevelOrderTransformConfiguration(TransformConfiguration):
             default=superrows_default,
             help="If specified, output rows per repo are combined to form a single repo",
         )
+        parser.add_argument(
+            f"--{extras_prefix}{min_proc_time_ms_key}",
+            type=float,
+            default=min_proc_time_ms_default,
+            help="Fix minimum processing time per repo in milliseconds, useful when reading from rate limited cloud storage",
+        )
+        parser.add_argument(
+            f"--{extras_prefix}{read_table_cache_key}",
+            type=int,
+            default=0,
+            help="cache size in MBs used to cache input tables on local storage, useful when reading from COS.",
+        )
+
+    def _get_extra_params(self, args):
+        captured = CLIArgumentProvider.capture_parameters(args, extras_prefix, False)
+        return captured
 
     def apply_input_params(self, args: Namespace) -> bool:
         """
@@ -442,6 +476,7 @@ class RepoLevelOrderTransformConfiguration(TransformConfiguration):
             stage_two_ray_cpus_key: runtime_captured["worker_options"]["num_cpus"],
         }
         self.params = self.params | ray_actor_params
+        self.params = self.params | self._get_extra_params(args)
         return True
 
 

@@ -5,6 +5,10 @@ import pandas as pd
 import pyarrow as pa
 import ray
 from data_processing.utils import get_logger
+from dpk_repo_level_order.internal.cache.file_system_cache import (
+    FileSystemCache,
+    enforce_minimum_processing_time,
+)
 
 
 class GroupByRepo:
@@ -22,6 +26,7 @@ class GroupByRepo:
         logger,
         data_access,
         table_mapper=None,
+        enforce_minimum_processing_time_ms=0,
     ):
         self.repo_column_name = repo_column_name
         self.output_dir = output_dir
@@ -29,6 +34,7 @@ class GroupByRepo:
         self.data_access = data_access
         self.enable_superrows = True
         self.table_mapper = table_mapper
+        self.enforce_minimum_processing_time_ms = enforce_minimum_processing_time_ms
         if self.table_mapper is None:
             """
             table_mapper is a function of signature: func(table: pa.Table, filename: str)-> List[Tuple[pa.Table, filename]]:
@@ -41,6 +47,13 @@ class GroupByRepo:
         ]
 
     def process(self, repo: str, files: List[str]):
+        min_proc_time = self.enforce_minimum_processing_time_ms
+        if min_proc_time > 0:
+            # convert
+            self._process = enforce_minimum_processing_time(min_proc_time)(self._process)
+        return self._process(repo, files)
+
+    def _process(self, repo: str, files: List[str]):
         try:
             repo_table = self._read_table_for_group(self.repo_column_name, repo, files)
             if len(repo_table) == 0:
@@ -116,10 +129,39 @@ class GroupByRepoActor(GroupByRepo):
     """
 
     def __init__(self, params: dict):
+        try:
+            min_proc_time = params["min_process_time_ms"] * 1.0 / 1000
+            if min_proc_time > 0:
+                print(f"RATE LIMITING ENABLED: min_process_time_ms={min_proc_time} per repo.")
+        except KeyError:
+            min_proc_time = 0
+        data_access = self._get_data_access(params)
+
         super().__init__(
             params["repo_column_name"],
             params["output_dir"],
             None,
-            params["data_access_factory"].create_data_access(),
+            data_access,
             params["mapper"],
+            min_proc_time,
         )
+
+    def _get_data_access(self, params):
+        # Create data_access object from factory
+        data_access = params["data_access_factory"].create_data_access()
+        # In case the read_table_cache_limit is set,
+        # let us decorate the data_access.read_table method
+        # useful in case of s3 or other cloud based data_access
+        # it can download the files to a temporary folder on the
+        # device node and read the file from it next time, it is read.
+        self.read_table_cache_limit = params["read_table_cache_limit"]
+        if self.read_table_cache_limit > 0:
+            print(f"CACHING enabled for read_table. limit={self.read_table_cache_limit}MB")
+            self.fs_cache = FileSystemCache(limit=self.read_table_cache_limit * 1024 * 1024)
+            data_access.get_table = self.fs_cache.cache_decorator(data_access.get_table)
+        return data_access
+
+    def __del__(self):
+        super().__del__()
+        if self.read_table_cache_limit:
+            del self.fs_cache

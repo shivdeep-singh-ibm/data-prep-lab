@@ -49,6 +49,8 @@ repo_level_params = {
     "repo_lvl_store_backend_dir": "/tmp/mystore",
     "repo_lvl_language_column": "language",
     "repo_lvl_sorting_enabled": True,
+    "extras_min_proc_time_ms": 10,
+    # "extras_read_table_cache": 100,
     #    "repo_lvl_output_by_langs": True,
     #    "repo_lvl_combine_rows": True,
 }

@@ -22,14 +22,20 @@ SORT_SEMANTIC_NORMALISED = "SORT_SEMANTIC_NORMALISED"
 
 def semantic_sort(df, logger, title_column_name, language_column_name):
     return sort_sem(
-        files_df=df, logger=logger, title_column_name=title_column_name, language_column_name=language_column_name
+        files_df=df,
+        logger=logger,
+        title_column_name=title_column_name,
+        language_column_name=language_column_name,
     )
 
 
 def semantic_sort_normalised(df, logger, title_column_name, language_column_name):
     check_and_update_title(df)
     return sort_sem(
-        files_df=df, logger=logger, title_column_name=title_column_name, language_column_name=language_column_name
+        files_df=df,
+        logger=logger,
+        title_column_name=title_column_name,
+        language_column_name=language_column_name,
     )
 
 
@@ -38,7 +44,10 @@ def default_sort(df, logger, title_column_name, language_column_name):
 
 
 def get_sorting_func(
-    sorting_algo: str, title_column_name: str, logger: logging.Logger, language_column_name: str
+    sorting_algo: str,
+    title_column_name: str,
+    logger: logging.Logger,
+    language_column_name: str,
 ) -> Callable[[pa.Table], pa.Table]:
     if sorting_algo == SORT_SEMANTIC:
         sort_by = semantic_sort
@@ -57,7 +66,10 @@ def get_sorting_func(
         df = table.to_pandas()
         try:
             sorted_df = sort_by(
-                df=df, logger=logger, title_column_name=title_column_name, language_column_name=language_column_name
+                df=df,
+                logger=logger,
+                title_column_name=title_column_name,
+                language_column_name=language_column_name,
             )
         except FunctionTimedOut as e:
             logger.error(
@@ -136,7 +148,12 @@ def superrow_table(table: pa.Table, repo_column_name: str, language_column_name=
     return new_table
 
 
-def get_transforming_func(sorting_func=None, superrows_func=None, filename_func=None, language_column_name="language"):
+def get_transforming_func(
+    sorting_func=None,
+    superrows_func=None,
+    filename_func=None,
+    language_column_name="language",
+):
     def my_transform(table, file_name):
         out_table = table
         if sorting_func:
