@@ -41,7 +41,7 @@ def get_dominant_language_repo_packing(table, language_column="language", title_
     This function takes a table with columns ['title'] and ['language'] where title
     is a path and language represents a programming language.
     """
-    df = table.to_pandas()
+    df = table.select([language_column, title_column]).to_pandas()
     lan = df[language_column].value_counts()
 
     top_languages_info = lan.nlargest(3)
@@ -53,8 +53,6 @@ def get_dominant_language_repo_packing(table, language_column="language", title_
         return most_occuring
 
     second_most_occuring = top_languages[1]
-    print(f"Most promiment languages:  [{most_occuring} ,{second_most_occuring}]")
-
     # two languages are equally prominent
     if top_languages_info[most_occuring] == top_languages_info[second_most_occuring]:
         # multiple languages
@@ -72,10 +70,10 @@ def get_dominant_language_repo_packing(table, language_column="language", title_
 
         # since we are unable to decide which language to choose, randomly choose one
         chosen_language = random.choice([most_occuring, second_most_occuring])
-        print(
-            f"Not much info is available to decide between {most_occuring} and {second_most_occuring}. So choosing {chosen_language}"
-        )
+        # print(
+        #    f"Not much info is available to decide between {most_occuring} and {second_most_occuring}. So choosing {chosen_language}"
+        # )
         return chosen_language
 
-    print(f"returning from the end of function. chosen language: {most_occuring}")
+    # print(f"returning from the end of function. chosen language: {most_occuring}")
     return most_occuring

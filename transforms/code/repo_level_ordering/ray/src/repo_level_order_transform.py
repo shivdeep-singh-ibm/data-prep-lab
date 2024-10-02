@@ -27,6 +27,7 @@ from dpk_repo_level_order.internal.store.store_factory import (
     create_store,
     create_store_params,
     init_store_params,
+    store_type_value_ray,
     validate_store_params,
 )
 from ray.actor import ActorHandle
@@ -52,6 +53,7 @@ stage_two_ray_cpus_key = "ray_num_cpus"
 
 sorting_enable_key = "sorting_enabled"
 sorting_algo_key = "sorting_algo"
+sorting_timeout = "sorting_timeout"
 
 output_by_langs_key = "output_by_langs"
 output_superrows_key = "combine_rows"
@@ -67,7 +69,7 @@ sort_enable_default = False
 sort_algo_default = "SORT_BY_PATH"
 output_by_lang_default = False
 superrows_default = False
-
+sorting_timeout_default = 600  # 10 min
 # extra options
 # iminimun processing timeout
 extras_prefix = "extras_"
@@ -75,6 +77,8 @@ min_proc_time_ms_key = "min_proc_time_ms"
 min_proc_time_ms_default = 0
 # enable read table cache
 read_table_cache_key = "read_table_cache"
+read_table_cache_dir_key = "read_table_cache_dir"
+read_table_cache_dir_default = "/tmp/read_cache_dir"
 
 
 class RepoLevelOrderTransform(AbstractTableTransform):
@@ -115,6 +119,7 @@ class RepoLevelOrderTransform(AbstractTableTransform):
         self.config = config
         self.grouping_column = config.get(grouping_column_key, repo_column_default_value)
         store_params = config.get(store_params_key)
+        self.store_type = store_params[store_type_key]
         validate_store_params(store_params)
         self.store = create_store(store_params)
         self.group_batch_size = group_batch_size
@@ -133,6 +138,12 @@ class RepoLevelOrderTransform(AbstractTableTransform):
             if batch:
                 batches.append(batch)
         return batches
+
+    def _to_value(self, file_name):
+        if self.store_type == store_type_value_ray:
+            return file_name
+        else:
+            return os.path.basename(file_name)
 
     def transform(self, table: pa.Table, file_name: str = None) -> tuple[list[pa.Table], dict[str, Any]]:
         """
@@ -157,7 +168,7 @@ class RepoLevelOrderTransform(AbstractTableTransform):
                 # since store uses filesystem as backend
                 # can't store full path in store since,
                 # store is currently flat filesystem.
-                file_name = os.path.basename(file_name)
+                file_name = self._to_value(file_name)
                 grp_flow[group] = file_name
                 self.logger.debug(f"Updating {group} to store")
 
@@ -245,11 +256,12 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
         self.start_time = datetime.datetime.now()
         self.repo_column_name = self.params[grouping_column_key]
         self.language_column_name = self.params[language_column_key]
-
+        self.sorting_timeout = self.params[sorting_timeout]
         # params for rate limiting and caching
         self.extra_params = {
             "read_table_cache_limit": self.params[read_table_cache_key],
             "min_process_time_ms": self.params[min_proc_time_ms_key],
+            "read_table_cache_dir": self.params[read_table_cache_dir_key],
         }
         self.logger.info(f"extra params {self.extra_params}")
         return self.params
@@ -275,7 +287,9 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
                 get_sorting_func,
             )
 
-            sort_func = get_sorting_func(self.sorting_algo, "title", self.logger, self.language_column_name)
+            sort_func = get_sorting_func(
+                self.sorting_algo, "title", self.logger, self.language_column_name, self.sorting_timeout
+            )
             # Add sort_func to params
             mapper_function_params = mapper_function_params | {
                 "sorting_func": sort_func,
@@ -302,10 +316,15 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
 
     def _prepare_inputs(self):
         store = create_store(self.store_params)
-        files_location = self.input_folder
+        store_type = self.store_params[store_type_key]
+
         p_input = []
         for repo, files in store.items_kv():
-            p_input.append((repo, [f"{files_location}/{file}" for file in files]))
+            if store_type == store_type_value_ray:
+                p_input.append((repo, [f"{file}" for file in files]))
+            else:
+                files_location = self.input_folder
+                p_input.append((repo, [f"{files_location}/{file}" for file in files]))
         return p_input
 
     def _group_and_sort(self):
@@ -442,6 +461,12 @@ class RepoLevelOrderTransformConfiguration(TransformConfiguration):
             help="If specified, output rows per repo are combined to form a single repo",
         )
         parser.add_argument(
+            f"--{cli_prefix}{sorting_timeout}",
+            type=int,
+            default=sorting_timeout_default,
+            help="If specified, output rows per repo are combined to form a single repo",
+        )
+        parser.add_argument(
             f"--{extras_prefix}{min_proc_time_ms_key}",
             type=float,
             default=min_proc_time_ms_default,
@@ -452,6 +477,12 @@ class RepoLevelOrderTransformConfiguration(TransformConfiguration):
             type=int,
             default=0,
             help="cache size in MBs used to cache input tables on local storage, useful when reading from COS.",
+        )
+        parser.add_argument(
+            f"--{extras_prefix}{read_table_cache_dir_key}",
+            type=str,
+            default=read_table_cache_dir_default,
+            help="dir for caching input tables, useful when reading from COS.",
         )
 
     def _get_extra_params(self, args):

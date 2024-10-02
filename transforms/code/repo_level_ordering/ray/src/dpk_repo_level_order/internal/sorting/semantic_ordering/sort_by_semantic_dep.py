@@ -48,7 +48,6 @@ supported_exts = {
 }
 
 
-@func_set_timeout(1800)
 def sort_sem(
     files_df: pd.DataFrame,
     logger: Logger,

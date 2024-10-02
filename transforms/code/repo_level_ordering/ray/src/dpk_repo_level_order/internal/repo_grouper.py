@@ -49,7 +49,6 @@ class GroupByRepo:
     def process(self, repo: str, files: List[str]):
         min_proc_time = self.enforce_minimum_processing_time_ms
         if min_proc_time > 0:
-            # convert
             self._process = enforce_minimum_processing_time(min_proc_time)(self._process)
         return self._process(repo, files)
 
@@ -132,7 +131,7 @@ class GroupByRepoActor(GroupByRepo):
         try:
             min_proc_time = params["min_process_time_ms"] * 1.0 / 1000
             if min_proc_time > 0:
-                print(f"RATE LIMITING ENABLED: min_process_time_ms={min_proc_time} per repo.")
+                print(f"RATE LIMITING ENABLED: min_process_time={min_proc_time}sec per repo.")
         except KeyError:
             min_proc_time = 0
         data_access = self._get_data_access(params)
@@ -156,8 +155,10 @@ class GroupByRepoActor(GroupByRepo):
         # device node and read the file from it next time, it is read.
         self.read_table_cache_limit = params["read_table_cache_limit"]
         if self.read_table_cache_limit > 0:
+            read_table_cache_dir = params["read_table_cache_dir"]
+            print(f"Cache dir is {read_table_cache_dir}")
             print(f"CACHING enabled for read_table. limit={self.read_table_cache_limit}MB")
-            self.fs_cache = FileSystemCache(limit=self.read_table_cache_limit * 1024 * 1024)
+            self.fs_cache = FileSystemCache(dir=read_table_cache_dir, limit=self.read_table_cache_limit * 1024 * 1024)
             data_access.get_table = self.fs_cache.cache_decorator(data_access.get_table)
         return data_access
 

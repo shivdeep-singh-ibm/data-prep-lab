@@ -1,20 +1,194 @@
 import os
 import time
-from abc import ABC, abstractmethod
 from functools import wraps
-from typing import List, Optional
 
 import pyarrow
 import pyarrow.fs
 from data_processing.utils.transform_utils import TransformUtils
-from pyarrow import Table
-from pyarrow.fs import FileInfo, LocalFileSystem
+from pyarrow.fs import LocalFileSystem
 from pyarrow.parquet import ParquetDataset
+
+
+class LockFileContextManager:
+    """
+    A context manager that acquires and releases a lock on a file in pyarrow.fs.
+
+    Args:
+        fs (pyarrow.fs): The instance to use.
+        filepath (str): The path of the file to be locked.
+        retries (int, optional): The number of times to retry acquiring the lock (default is 18000).
+
+    Attributes:
+        fs (pyarrow.fs): The pyarrow.fs instance used by the context manager.
+        filename (str): The name of the file to be locked.
+        lock_filename (str): The name of the lock file in pyarrow.fs.
+        max_retries (int): The maximum number of times to retry acquiring the lock.
+        sleep_duration (float): The duration to sleep between retries, in seconds.
+
+    Methods:
+        _check_if_locked(self): Check if the lock file exists in pyarrow.fs.
+        _create_lock(self): Create the lock file in pyarrow.fs.
+        _wait_for_lock(self): Wait for a lock to be released or timeout occurs.
+        _ensure_not_locked(self): Ensure that the lock is not already taken, and wait if necessary.
+        _file_exists(self, filename): Check if a file exists in pyarrow.fs.
+        _remove_file(self, filename): Remove a file from pyarrow.fs.
+        __enter__(self): Enter the context of the lock and acquire it.
+        __exit__(self, exc_type, exc_value, traceback): Exit the context and release the lock if needed.
+        release(self): Release the lock by removing the lock file from pyarrow.fs.
+    """
+
+    def __init__(self, fs, filepath, retries=18000):
+        self.fs = fs
+        filename = os.path.basename(filepath)
+        lock_filename = f".lock-{filename}.lk"
+        self.lock_filename = filepath.replace(filename, lock_filename)
+        self.max_retries = retries
+        self.sleep_duration = 0.2
+        self.log_after = 100
+
+    def _check_if_locked(self):
+        return self._file_exists(self.lock_filename)
+
+    def _create_lock(self):
+        with open(self.lock_filename, "w"):
+            return
+
+    def _wait_for_lock(self):
+        wait_intervals = 0
+        for _ in range(self.max_retries):
+            # Wait since someone else has taken a lock
+            if self._check_if_locked():
+                if wait_intervals % self.log_after == 0:
+                    print(f"waiting on lock since {wait_intervals*self.sleep_duration}sec.")
+                time.sleep(self.sleep_duration)
+            else:
+                self._create_lock()
+                return
+        print(
+            f"warning: Lock couldn't be released after {self.max_retries * self.sleep_duration}sec for file: {self.lock_filename}."
+        )
+        return
+
+    def _ensure_not_locked(self):
+        for _ in range(self.max_retries):
+            if self._check_if_locked():
+                time.sleep(self.sleep_duration)
+            else:
+                return
+        print(
+            f"warning: Lock couldn't be released after {self.max_retries * self.sleep_duration}sec for file: {self.lock_filename}."
+        )
+        # may have undefined beahviour when retries timeout.
+        return
+
+    def _file_exists(self, filename):
+        try:
+            _ = self.fs.open_input_file(self.lock_filename)
+            return True
+        except FileNotFoundError:
+            return False
+
+    def _remove_file(self, filename):
+        try:
+            self.fs.delete_file(filename)
+        except Exception as e:
+            print(f"Could not delete lock. {e}")
+
+    def __enter__(self):
+        # Check for lock file
+        self.acquire()
+        # may have undefined beahviour when retries timeout.
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # clean up the lock file on exit
+        self.release()
+
+    def release(self):
+        self._remove_file(self.lock_filename)
+
+
+class ReadLock(LockFileContextManager):
+    """A context manager that acquires a read lock on a file in pyarrow.fs.
+
+    Args:
+        fs (pyarrow.fs): The pyarrow.fs instance to use.
+        filepath (str): The path of the file to be locked.
+        retries (int, optional): The number of times to retry acquiring the lock (default is 18000).
+
+    Attributes:
+        fs (pyarrow.fs): The pyarrow.fs instance used by the context manager.
+        filename (str): The name of the file to be locked.
+        lock_filename (str): The name of the lock file in pyarrow.fs.
+        max_retries (int): The maximum number of times to retry acquiring the lock.
+        sleep_duration (float): The duration to sleep between retries, in seconds.
+
+    Methods:
+        acquire(self): Acquire the read lock on the file. May have undefined behavior when retries timeout.
+        release(self): Release the read lock by removing the lock file from pyarrow.fs.
+    """
+
+    def acquire(self):
+        # may have undefined behavior when retries timeout.
+        return self._ensure_not_locked
+
+    def release(self):
+        # don't clean up the lock file on exit
+        pass
+
+
+class WriteLock(LockFileContextManager):
+    """A context manager that acquires a write lock on a file in pyarrow.fs.
+
+    Args:
+        fs (pyarrow.fs): The pyarrow.fs instance to use.
+        filepath (str): The path of the file to be locked.
+        retries (int, optional): The number of times to retry acquiring the lock (default is 18000).
+
+    Attributes:
+        fs (pyarrow.fs): The pyarrow.fs instance used by the context manager.
+        filename (str): The name of the file to be locked.
+        lock_filename (str): The name of the lock file in pyarrow.fs.
+        max_retries (int): The maximum number of times to retry acquiring the lock.
+        sleep_duration (float): The duration to sleep between retries, in seconds.
+
+    Methods:
+        acquire(self): Acquire the write lock on the file. May have undefined behavior when retries timeout.
+        release(self): Release the write lock by removing the lock file from pyarrow.fs.
+    """
+
+    def acquire(self):
+        # may have undefined behavior when retries timeout.
+        return self._wait_for_lock()
+
+    def release(self):
+        return self._remove_file(self.lock_filename)
 
 
 class FileSystemCache:
     """
-    Implements a simple file system cache that stores files up to a specified limit, evicts the oldest files if necessary.
+    Implements a simple file system cache that stores files up to a specified limit, evicts some files if necessary.
+
+    Attributes:
+        fs (pyarrow.fs.LocalFileSystem): The local file system object used for interacting with the file system.
+        dir (str): The base directory for storing cached files.
+        limit (int): The maximum total size of cached files in bytes.
+        used (int): The total size of cached files currently in use.
+        file_info_list (List[pyarrow.fs.FileInfo]): A list of `pyarrow.fs.FileInfo` objects representing the cached files.
+
+    Methods:
+        update(): Update the internal list of cached files and calculate the total size used.
+        cached_filename(name): Generate a cache filename from the given input file path.
+        get_internal_path_for(file_path): Get the internal path for a given cache filename.
+        write_table_to_cache(file_path, table): Write a PyArrow table to the cache.
+        read_table_from_cache(file_path): Read a PyArrow table from the cache.
+        is_present(file_path): Check if a given file path is present in the cache.
+        evict(cached_files): Evict the given list of cached files from the cache and update the internal state.
+        filter_files_by_size(target_size): Filter the list of cached files by size and return their paths up to the specified target size.
+        cache_decorator(func): A decorator function that can be used to wrap a function and automatically cache its results.
+        percent_full(): Calculate and return the percentage of the limit that is currently used by data.
+        apply_eviction_strategy(): Apply the eviction strategy when the data structure is 98% full.
+
     """
 
     def __init__(self, dir="/tmp/mycache", limit=1024 * 1024 * 1024):
@@ -33,6 +207,7 @@ class FileSystemCache:
         self.limit = limit
         self.used = 0
         self.file_info_list = []
+        self.lock_retries = 1000
 
     def update(self):
         """
@@ -70,15 +245,16 @@ class FileSystemCache:
         return o_file_path
 
     def write_table_to_cache(self, file_path, table):
-
         o_file_path = self.get_internal_path_for(file_path)
-        pyarrow.parquet.write_table(table=table, where=o_file_path, filesystem=self.fs)
-        self.update()
+        with WriteLock(self.fs, o_file_path):
+            pyarrow.parquet.write_table(table=table, where=o_file_path, filesystem=self.fs)
+            self.update()
 
     def read_table_from_cache(self, file_path):
         o_file_path = self.get_internal_path_for(file_path)
-        table = ParquetDataset(filesystem=self.fs, path_or_paths=o_file_path).read()
-        return table
+        with ReadLock(self.fs, o_file_path):
+            table = ParquetDataset(filesystem=self.fs, path_or_paths=o_file_path).read()
+            return table
 
     def is_present(self, file_path):
         """

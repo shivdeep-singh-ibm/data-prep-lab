@@ -12,6 +12,7 @@ from dpk_repo_level_order.internal.sorting.semantic_ordering import (
     sort_by_path,
     sort_sem,
 )
+from func_timeout import func_set_timeout
 from func_timeout.exceptions import FunctionTimedOut
 
 
@@ -48,6 +49,7 @@ def get_sorting_func(
     title_column_name: str,
     logger: logging.Logger,
     language_column_name: str,
+    timeout=0,
 ) -> Callable[[pa.Table], pa.Table]:
     if sorting_algo == SORT_SEMANTIC:
         sort_by = semantic_sort
@@ -58,6 +60,9 @@ def get_sorting_func(
     else:
         sort_by = default_sort
         logger.info("sort by path enabled")
+    if sorting_algo in [SORT_SEMANTIC, SORT_SEMANTIC_NORMALISED] and timeout > 0:
+        logger.info(f"semantic sort has a timeout of {timeout}sec")
+        sort_by = func_set_timeout(timeout)(sort_by)
 
     def sorter(table: pa.Table, file_name: str) -> pa.Table:
         if table.num_rows < 2:
