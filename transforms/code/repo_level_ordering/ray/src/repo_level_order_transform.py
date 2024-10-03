@@ -18,7 +18,7 @@ from typing import Any
 import pyarrow as pa
 from data_processing.data_access import DataAccessFactoryBase
 from data_processing.transform import AbstractTableTransform, TransformConfiguration
-from data_processing.utils import CLIArgumentProvider, get_logger
+from data_processing.utils import CLIArgumentProvider, get_logger, str2bool
 from data_processing_ray.runtime.ray import DefaultRayTransformRuntime, RayUtils
 from data_processing_ray.runtime.ray.runtime_configuration import (
     RayTransformRuntimeConfiguration,
@@ -439,7 +439,7 @@ class RepoLevelOrderTransformConfiguration(TransformConfiguration):
         parser.add_argument(
             f"--{cli_prefix}{sorting_enable_key}",
             default=sort_enable_default,
-            type=bool,
+            type=lambda x: bool(str2bool(x)),
             help=f"Enables sorting of output by algorithm specified using {cli_prefix}{sorting_algo_key}. Defaults to SORT_BY_PATH if no algorithm is specified.",
         )
         parser.add_argument(
@@ -450,13 +450,13 @@ class RepoLevelOrderTransformConfiguration(TransformConfiguration):
         )
         parser.add_argument(
             f"--{cli_prefix}{output_by_langs_key}",
-            type=bool,
+            type=lambda x: bool(str2bool(x)),
             default=output_by_lang_default,
             help="If specified, output is grouped into programming language folders.",
         )
         parser.add_argument(
             f"--{cli_prefix}{output_superrows_key}",
-            type=bool,
+            type=lambda x: bool(str2bool(x)),
             default=superrows_default,
             help="If specified, output rows per repo are combined to form a single repo",
         )
@@ -464,7 +464,7 @@ class RepoLevelOrderTransformConfiguration(TransformConfiguration):
             f"--{cli_prefix}{sorting_timeout}",
             type=int,
             default=sorting_timeout_default,
-            help="If specified, output rows per repo are combined to form a single repo",
+            help="Timeout value in seconds for semantic sorting before resorting to default sorting",
         )
         parser.add_argument(
             f"--{extras_prefix}{min_proc_time_ms_key}",
@@ -497,6 +497,9 @@ class RepoLevelOrderTransformConfiguration(TransformConfiguration):
         """
         captured = CLIArgumentProvider.capture_parameters(args, cli_prefix, False)
         self.params = self.params | captured
+        if not self.params[sorting_enable_key] and self.params[sorting_algo_key]:
+            raise ValueError("Sorting not enabled. Please enable sorting to use sorting algo.")
+
         store_params = create_store_params(self.params)
         self.logger.debug(f"store params in config: {store_params.keys()}")
         self.params = self.params | {grouping_column_key: self.params[grouping_column_key]} | store_params
