@@ -280,7 +280,10 @@ class FileSystemCache:
         :type cached_files: List[str]
         """
         for file in cached_files:
-            self.fs.delete_file(file)
+            try:
+                self.fs.delete_file(file)
+            except FileNotFoundError:
+                pass
         self.update()
 
     def filter_files_by_size(self, target_size):
