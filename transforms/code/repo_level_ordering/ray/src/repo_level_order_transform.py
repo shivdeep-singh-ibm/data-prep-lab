@@ -497,7 +497,11 @@ class RepoLevelOrderTransformConfiguration(TransformConfiguration):
         """
         captured = CLIArgumentProvider.capture_parameters(args, cli_prefix, False)
         self.params = self.params | captured
-        if not self.params[sorting_enable_key] and self.params[sorting_algo_key]:
+        if (
+            not self.params[sorting_enable_key]
+            and self.params[sorting_algo_key]
+            and not self.params[sorting_algo_key] == sort_algo_default
+        ):
             raise ValueError("Sorting not enabled. Please enable sorting to use sorting algo.")
 
         store_params = create_store_params(self.params)

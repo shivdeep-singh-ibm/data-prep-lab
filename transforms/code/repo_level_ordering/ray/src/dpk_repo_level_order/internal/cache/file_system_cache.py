@@ -318,16 +318,20 @@ class FileSystemCache:
             file_present_in_cache = self.is_present(path)
             if file_present_in_cache:
                 # read from cache
-                print("Successfully read from cache")
-                table = self.read_table_from_cache(path)
-                return table, 0
-            else:
-                table, retries = func(*args, **kwargs)
-                # check if there is enough space
-                self.apply_eviction_strategy()
-                # Write the table to cache
-                self.write_table_to_cache(path, table)
-                # how to handle execptions of cache here
+                try:
+                    print("Successfully read from cache")
+                    table = self.read_table_from_cache(path)
+                    return table, 0
+                except Exception as e:
+                    # In case of failing to read from cache,
+                    # consider it as not present in cache.
+                    print(f"Failed reading from cache. Falling back to usual read_table. {e}")
+            table, retries = func(*args, **kwargs)
+            # check if there is enough space
+            self.apply_eviction_strategy()
+            # Write the table to cache
+            self.write_table_to_cache(path, table)
+            # how to handle execptions of cache here
             return table, retries
 
         return wrapper
