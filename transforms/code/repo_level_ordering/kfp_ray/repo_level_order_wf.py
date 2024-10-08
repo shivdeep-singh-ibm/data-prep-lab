@@ -50,6 +50,11 @@ def compute_exec_params_func(
     repo_lvl_sorting_algo: str,
     repo_lvl_output_by_langs: bool,
     repo_lvl_combine_rows: bool,
+    repo_lvl_checkpoint_enable: bool,
+    repo_lvl_sorting_timeout: int,
+    extras_min_proc_time_ms: int,
+    extras_read_table_cache: int,
+    extras_read_table_cache_dir: str,
 ) -> dict:
     from runtime_utils import KFPUtils
 
@@ -68,15 +73,16 @@ def compute_exec_params_func(
         "repo_lvl_store_ray_cpus": repo_lvl_store_ray_cpus,
         "repo_lvl_store_ray_nworkers": repo_lvl_store_ray_nworkers,
         "repo_lvl_sorting_algo": repo_lvl_sorting_algo,
+        "repo_lvl_checkpoint_enable": repo_lvl_checkpoint_enable,
+        "repo_lvl_sorting_timeout": repo_lvl_sorting_timeout,
+        "extras_min_proc_time_ms": extras_min_proc_time_ms,
+        "extras_read_table_cache": extras_read_table_cache,
+        "extras_read_table_cache_dir": extras_read_table_cache_dir,
+        "repo_lvl_stage_one_only": repo_lvl_stage_one_only,
+        "repo_lvl_sorting_enabled": repo_lvl_sorting_enabled,
+        "repo_lvl_output_by_langs": repo_lvl_output_by_langs,
+        "repo_lvl_combine_rows": repo_lvl_combine_rows,
     }
-    if repo_lvl_stage_one_only == True:
-        res["repo_lvl_stage_one_only"] = ""
-    if repo_lvl_sorting_enabled == True:
-        res["repo_lvl_sorting_enabled"] = ""
-    if repo_lvl_output_by_langs == True:
-        res["repo_lvl_output_by_langs"] = ""
-    if repo_lvl_combine_rows == True:
-        res["repo_lvl_combine_rows"] = ""
     return res
 
 
@@ -122,7 +128,14 @@ def repo_level_order(
     # Ray cluster
     ray_name: str = "repo_level_order-kfp-ray",
     ray_head_options: dict = {"cpu": 1, "memory": 4, "image": task_image},
-    ray_worker_options: dict = {"replicas": 2, "max_replicas": 2, "min_replicas": 2, "cpu": 2, "memory": 4, "image": task_image},
+    ray_worker_options: dict = {
+        "replicas": 2,
+        "max_replicas": 2,
+        "min_replicas": 2,
+        "cpu": 2,
+        "memory": 4,
+        "image": task_image,
+    },
     server_url: str = "http://kuberay-apiserver-service.kuberay.svc.cluster.local:8888",
     # data access
     data_s3_config: str = "{'input_folder': 'test/repo_level_ordering/input', 'output_folder': 'test/repo_level_ordering/output'}",
@@ -130,9 +143,9 @@ def repo_level_order(
     data_max_files: int = -1,
     data_num_samples: int = -1,
     # orchestrator
-    runtime_actor_options: dict = {'num_cpus': 0.8},
+    runtime_actor_options: dict = {"num_cpus": 0.8},
     runtime_pipeline_id: str = "pipeline_id",
-    runtime_code_location: dict = {'github': 'github', 'commit_hash': '12345', 'path': 'path'},
+    runtime_code_location: dict = {"github": "github", "commit_hash": "12345", "path": "path"},
     # repo_level_order parameters
     repo_lvl_stage_one_only: bool = False,
     repo_lvl_grouping_column: str = "repo_name",
@@ -144,6 +157,11 @@ def repo_level_order(
     repo_lvl_sorting_algo: str = "SORT_BY_PATH",
     repo_lvl_output_by_langs: bool = False,
     repo_lvl_combine_rows: bool = False,
+    repo_lvl_checkpoint_enable: bool = False,
+    repo_lvl_sorting_timeout: int = 0,
+    extras_min_proc_time_ms: int = 0,
+    extras_read_table_cache: int = 0,
+    extras_read_table_cache_dir: str = "/dev/shm/myycache",
     # additional parameters
     additional_params: str = '{"wait_interval": 2, "wait_cluster_ready_tmout": 400, "wait_cluster_up_tmout": 300, "wait_job_ready_tmout": 400, "wait_print_tmout": 30, "http_retries": 5, "delete_cluster_delay_minutes": 0}',
 ):
@@ -191,7 +209,9 @@ def repo_level_order(
     :return: None
     """
     # create clean_up task
-    clean_up_task = cleanup_ray_op(ray_name=ray_name, run_id=run_id, server_url=server_url, additional_params=additional_params)
+    clean_up_task = cleanup_ray_op(
+        ray_name=ray_name, run_id=run_id, server_url=server_url, additional_params=additional_params
+    )
     ComponentUtils.add_settings_to_component(clean_up_task, ONE_HOUR_SEC * 2)
     # pipeline definition
     with dsl.ExitHandler(clean_up_task):
@@ -215,6 +235,11 @@ def repo_level_order(
             repo_lvl_sorting_algo=repo_lvl_sorting_algo,
             repo_lvl_output_by_langs=repo_lvl_output_by_langs,
             repo_lvl_combine_rows=repo_lvl_combine_rows,
+            repo_lvl_checkpoint_enable=repo_lvl_checkpoint_enable,
+            repo_lvl_sorting_timeout=repo_lvl_sorting_timeout,
+            extras_min_proc_time_ms=extras_min_proc_time_ms,
+            extras_read_table_cache=extras_read_table_cache,
+            extras_read_table_cache_dir=extras_read_table_cache_dir,
         )
 
         ComponentUtils.add_settings_to_component(compute_exec_params, ONE_HOUR_SEC * 2)

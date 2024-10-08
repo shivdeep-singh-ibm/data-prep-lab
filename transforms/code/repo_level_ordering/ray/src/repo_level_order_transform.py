@@ -13,7 +13,9 @@
 import datetime
 import os
 from argparse import ArgumentParser, Namespace
-from typing import Any
+from collections import namedtuple
+from functools import reduce
+from typing import Any, List
 
 import pyarrow as pa
 from data_processing.data_access import DataAccessFactoryBase
@@ -59,6 +61,11 @@ output_by_langs_key = "output_by_langs"
 output_superrows_key = "combine_rows"
 
 group_batch_size = 50
+
+# checkpoint
+checkpoint_enable_default = False
+checkpoint_enable_key = "checkpoint_enable"
+
 
 # default cli args
 language_column_default_value = "language"
@@ -217,6 +224,8 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
         self.ray_workers = self.params[stage_two_ray_workers_key]
         self.ray_num_cpus = self.params[stage_two_ray_cpus_key]
 
+        self.checkpoint_enable = self.params[checkpoint_enable_key]
+
     def _initialize_store_params(self):
 
         store_params = self.params[store_params_key]
@@ -325,7 +334,32 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
             else:
                 files_location = self.input_folder
                 p_input.append((repo, [f"{files_location}/{file}" for file in files]))
+        if self.checkpoint_enable:
+            p_input = self._update_input_from_checkpoint(p_input)
         return p_input
+
+    def _update_input_from_checkpoint(self, p_input):
+        RepoInfo = namedtuple("name", ["name", "files"])
+        myda, _ = self.daf.create_data_access()._list_files_folder(self.output_folder)
+        input_repos = [RepoInfo(entry[0], entry[1]) for entry in p_input]
+        already_processed_files = [
+            os.path.basename(v).replace(".parquet", "").replace("%2F", "/")
+            for d in myda
+            for k, v in d.items()
+            if k == "name" and ".parquet" in v
+        ]
+        already_processed_files = set(already_processed_files)
+        unique_input_files = set([f.name for f in input_repos])
+
+        files_left_to_process = unique_input_files - already_processed_files
+        # update p_input
+        new_p_input = []
+
+        for repo_info in input_repos:
+            for f in files_left_to_process:
+                if f.replace("%2F", "/") == repo_info.name:
+                    new_p_input.append(repo_info)
+        return new_p_input
 
     def _group_and_sort(self):
 
@@ -356,7 +390,18 @@ class RepoLevelOrderRuntime(DefaultRayTransformRuntime):
         p_pool = ActorPool(processors)
         self.logger.info(f"Processing {len(p_input)} repos with {self.ray_workers} workers")
         replies = list(p_pool.map_unordered(lambda a, x: a.process.remote(x[0], x[1]), p_input))
-        return {"nrepos": len(p_input)}
+        stats_from_actors = list(p_pool.map_unordered(lambda a, x: a.get_execution_stats.remote(), p_input))
+
+        stats = {}
+        if stats_from_actors:
+
+            def my_reduce(s1, s2):
+                s1.add_stats(s2.get_execution_stats())
+                return s1
+
+            cumulated_stats = reduce(my_reduce, stats_from_actors)
+            stats = stats | cumulated_stats.get_execution_stats()
+        return {"nrepos": len(p_input)} | stats
 
     def compute_execution_stats(self, stats: dict[str, Any]) -> dict[str, Any]:
         """
@@ -459,6 +504,12 @@ class RepoLevelOrderTransformConfiguration(TransformConfiguration):
             type=lambda x: bool(str2bool(x)),
             default=superrows_default,
             help="If specified, output rows per repo are combined to form a single repo",
+        )
+        parser.add_argument(
+            f"--{cli_prefix}{checkpoint_enable_key}",
+            type=lambda x: bool(str2bool(x)),
+            default=checkpoint_enable_default,
+            help="If specified, it processes the only the repos which have not been processed already.",
         )
         parser.add_argument(
             f"--{cli_prefix}{sorting_timeout}",

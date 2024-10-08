@@ -51,6 +51,7 @@ repo_level_params = {
     "repo_lvl_sorting_enabled": True,
     "repo_lvl_output_by_langs": True,
     "repo_lvl_combine_rows": True,
+    "extras_min_proc_time_ms": 1000,
 }
 
 

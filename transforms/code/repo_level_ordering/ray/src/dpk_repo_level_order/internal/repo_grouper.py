@@ -4,6 +4,7 @@ from typing import List
 import pandas as pd
 import pyarrow as pa
 import ray
+from data_processing.transform import TransformStatistics
 from data_processing.utils import get_logger
 from dpk_repo_level_order.internal.cache.file_system_cache import (
     FileSystemCache,
@@ -40,6 +41,7 @@ class GroupByRepo:
             table_mapper is a function of signature: func(table: pa.Table, filename: str)-> List[Tuple[pa.Table, filename]]:
             """
             self.table_mapper = self._default_mapper_func
+        self.stats = TransformStatistics()
 
     def _default_mapper_func(self, table, file_name):
         return [
@@ -69,7 +71,10 @@ class GroupByRepo:
 
                 self.logger.info(f"Write {filename}, tables: {len(out_table)}")
                 self._write_parquet(out_table, filename)
+            self.stats.add_stats({"passed": 1})
         except Exception as e:
+            failure_stat = {"n_failed_repos": 1, f"failed_repo[{repo}]": 1}
+            self.stats.add_stats(failure_stat)
             self.logger.error(f"Failed processing repo: {repo}. {e}")
 
     def _write_parquet(self, table, repo_name):
@@ -110,6 +115,9 @@ class GroupByRepo:
 
         return filtered_table
 
+    def get_execution_stats(self):
+        return self.stats
+
 
 @ray.remote(scheduling_strategy="SPREAD")
 class GroupByRepoActor(GroupByRepo):
@@ -122,18 +130,19 @@ class GroupByRepoActor(GroupByRepo):
          'repo_column_name': str,
          'output_dir': str,
          'mapper': A function with signature: func(table: pa.Table, filename: str)->List[Tuple[pa.Table, str]]
-         'data_access_creds': A dict os s3 creds or None eg. {'access_key': <>, 'secret_key': <>, 'url': <>}
+         'data_access_factory': It can create a data_access to read/write pyarrow tables.
+         'min_process_time_ms': An optional parameter which enforces `min_process_time` in milliseconds on the process function.
+                                It is useful to slow down the processing of repos to counter rate-limiting of input data.
+         'read_table_cache_limit': An option param representing the size of cache in MBs, used to cache input tables. It is useful when reading from cloud object storage.
+         'read_table_cache_dir': A directory to be used for cache. can be /tmp or any other. Can be /dev/shm/<> for using memory instead of disk.
+                                This caching feature is added to data_acces.read_table by using a decorator pattern.
+
       }
 
     """
 
     def __init__(self, params: dict):
-        try:
-            min_proc_time = params["min_process_time_ms"] * 1.0 / 1000
-            if min_proc_time > 0:
-                print(f"RATE LIMITING ENABLED: min_process_time={min_proc_time}sec per repo.")
-        except KeyError:
-            min_proc_time = 0
+        min_proc_time = self._get_min_proc_time(params)
         data_access = self._get_data_access(params)
 
         super().__init__(
@@ -144,6 +153,15 @@ class GroupByRepoActor(GroupByRepo):
             params["mapper"],
             min_proc_time,
         )
+
+    def _get_min_proc_time(self, params):
+        try:
+            min_proc_time = params["min_process_time_ms"] * 1.0 / 1000
+            if min_proc_time > 0:
+                print(f"RATE LIMITING ENABLED: min_process_time={min_proc_time}sec per repo.")
+        except KeyError:
+            min_proc_time = 0
+        return min_proc_time
 
     def _get_data_access(self, params):
         # Create data_access object from factory
