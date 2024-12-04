@@ -16,6 +16,7 @@ from typing import Any
 
 import ray
 from ray.experimental.state.api import list_actors
+from ray.util.state.common import RAY_MAX_LIMIT_FROM_DATA_SOURCE
 from data_processing.utils import GB, UnrecoverableException
 from ray.actor import ActorHandle
 from ray.exceptions import RayError
@@ -113,7 +114,7 @@ class RayUtils:
         actors = [operator() for _ in range(n_actors)]
         for i in range(120):
             time.sleep(1)
-            alive = list_actors(filters=[("class_name", "=", cls_name), ("state", "=", "ALIVE")])
+            alive = list_actors(filters=[("class_name", "=", cls_name), ("state", "=", "ALIVE")], limit=RAY_MAX_LIMIT_FROM_DATA_SOURCE)
             if len(actors) == len(alive):
                 return actors
         # failed - raise an exception
